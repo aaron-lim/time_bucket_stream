@@ -1,0 +1,132 @@
+class TimeBucketStream
+  VERSION: String
+  DEFAULT_CLAIM_GRACE: Integer
+  DEFAULT_MALFORMED_ENTRY: Symbol
+  DEFAULT_STALE_PARTIAL_AFTER: Integer
+  DEFAULT_QUARANTINE_RETENTION: Integer
+  MALFORMED_ENTRY_MODES: Array[Symbol]
+
+  attr_reader claim_grace: Integer
+  attr_reader codec: untyped
+  attr_reader malformed_entry: Symbol
+  attr_reader paths: Paths
+  attr_reader quarantine_retention: Integer?
+  attr_reader stale_partial_after: Integer
+  attr_reader sync: Symbol
+
+  def initialize: (path: String, ?sync: untyped, ?clock: untyped, ?claim_grace: untyped, ?stale_partial_after: untyped, ?quarantine_retention: untyped, ?malformed_entry: untyped, ?codec: untyped) -> void
+  def append: (untyped payload) -> Integer
+  def read: () -> Batch
+  def drain: () { (untyped payload) -> untyped } -> Batch
+  def close: () -> void
+
+  module Codecs
+    def self.validate!: (untyped codec) -> untyped
+
+    class Json
+      def dump: (untyped value) -> String
+      def load: (String value) -> untyped
+    end
+
+    class Oj
+      def initialize: () -> void
+      def dump: (untyped value) -> String
+      def load: (String value) -> untyped
+    end
+  end
+
+  class Batch
+    include Enumerable[untyped]
+
+    attr_reader entries: Array[[String, untyped]]
+
+    def initialize: (entries: Array[[String, untyped]], on_delete: untyped, on_release: untyped) -> void
+    def each: () { (untyped) -> void } -> Array[[String, untyped]]
+    def each: () -> Enumerator[untyped, void]
+    def size: () -> Integer
+    def length: () -> Integer
+    def empty?: () -> bool
+    def delete: () -> bool
+    def release: () -> bool
+    def finished?: () -> bool
+  end
+
+  class Writer
+    BUCKET_FORMAT: String
+    SYNC_MODES: Array[Symbol]
+
+    attr_reader codec: untyped
+    attr_reader paths: Paths
+    attr_reader sync: Symbol
+
+    def initialize: (path: String, ?sync: untyped, ?clock: untyped, ?codec: untyped) -> void
+    def append: (untyped payload) -> Integer
+    def close: () -> void
+    def close_stale: () -> void
+  end
+
+  class Quarantine
+    DEFAULT_RETENTION: Integer
+    TIMESTAMP_PATTERN: Regexp
+
+    attr_reader paths: Paths
+    attr_reader retention: Integer?
+
+    def self.normalize_retention: (untyped value) -> Integer?
+    def initialize: (path: String, ?clock: untyped, ?retention: untyped) -> void
+    def cleanup: () -> nil
+  end
+
+  module LogName
+    PATTERN: Regexp
+
+    def self.valid?: (untyped name) -> bool
+    def self.bucket: (untyped name) -> String?
+  end
+
+  class Claimer
+    DEFAULT_CLAIM_GRACE: Integer
+    DEFAULT_STALE_PARTIAL_AFTER: Integer
+    DEFAULT_QUARANTINE_RETENTION: Integer
+
+    attr_reader claim_grace: Integer
+    attr_reader paths: Paths
+    attr_reader quarantine_retention: Integer?
+    attr_reader stale_partial_after: Integer
+
+    def self.normalize_claim_grace: (untyped value) -> Integer
+    def self.normalize_stale_partial_after: (untyped value) -> Integer
+    def self.normalize_quarantine_retention: (untyped value) -> Integer?
+    def initialize: (path: String, ?clock: untyped, ?claim_grace: untyped, ?stale_partial_after: untyped, ?quarantine_retention: untyped) -> void
+    def claim_completed: (?before: String) -> Array[Claim]
+    def delete_claimed: (untyped log_name) -> untyped
+    def release_claimed: (untyped log_name) -> untyped
+  end
+
+  class Claim
+    attr_reader name: String
+    attr_reader path: String
+
+    def initialize: (name: String, path: String, lock_file: untyped) -> void
+    def read_lines: () -> Array[String]
+    def delete: () -> void
+    def quarantine: (paths: Paths, reason: untyped, ?metadata: untyped, ?clock: untyped) -> String?
+    def release: () -> void
+  end
+
+  class Paths
+    attr_reader path: String
+
+    def initialize: (path: String) -> void
+    def base: () -> String
+    def logs: () -> String
+    def processing: () -> String
+    def quarantine: () -> String
+    def claim_locks: () -> String
+    def log_for: (String writer_id) -> String
+    def processing_log_for: (String log_name) -> String
+    def quarantine_log_for: (String log_name) -> String
+    def quarantine_metadata_for: (String log_name) -> String
+    def claim_lock_for: (String log_name) -> String
+  end
+end
